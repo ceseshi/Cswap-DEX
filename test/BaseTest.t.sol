@@ -30,11 +30,6 @@ contract BaseTest is Test {
         address payable[] memory _users = utils.createUsers(4, 1 ether, labels);
 
         // setup users
-        users = Users({
-            alice: _users[0],
-            bob: _users[1],
-            carol: _users[2],
-            dave: _users[3]
-        });
+        users = Users({alice: _users[0], bob: _users[1], carol: _users[2], dave: _users[3]});
     }
 }
