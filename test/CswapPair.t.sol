@@ -3,10 +3,10 @@ pragma solidity ^0.8.19;
 
 import "forge-std/Test.sol";
 import "./BaseTest.t.sol";
-import "../src/UniswapV2Pair.sol";
+import "../src/CswapPair.sol";
 
-contract UniswapV2PairTest is BaseTest {
-    UniswapV2Pair public pair;
+contract CswapPairTest is BaseTest {
+    CswapPair public pair;
 
     address token0 = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; //USDC
     address token1 = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2; //WETH
@@ -17,7 +17,7 @@ contract UniswapV2PairTest is BaseTest {
         //uint256 forkId =
         vm.createSelectFork(vm.rpcUrl("mainnet"));
 
-        pair = new UniswapV2Pair();
+        pair = new CswapPair();
 
         users.alice = payable(0x5ba53D4573C5036aBa93c66F461884F13D91531C);
 
