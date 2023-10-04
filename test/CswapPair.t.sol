@@ -11,6 +11,9 @@ contract CswapPairTest is BaseTest {
     address token0 = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; //USDC
     address token1 = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2; //WETH
 
+    uint256 initialAmount0;
+    uint256 initialAmount1;
+
     function setUp() public override {
         super.setUp();
 
@@ -21,19 +24,18 @@ contract CswapPairTest is BaseTest {
 
         users.alice = payable(0x5ba53D4573C5036aBa93c66F461884F13D91531C);
 
-        deal(token0, users.alice, 3000 * 1e6);
-        deal(token1, users.alice, 3 * 1e18);
+        initialAmount0 = 3000 * 1e6;
+        initialAmount1 = 3 * 1e18;
+
+        deal(token0, users.alice, initialAmount0);
+        deal(token1, users.alice, initialAmount1);
 
         pair.initialize(token0, token1);
+
+        addLiquidity();
     }
 
-    function testMintSwap() public {
-        vm.startPrank(users.alice);
-
-        uint256 initialToken0 = IERC20(token0).balanceOf(users.alice);
-        uint256 initialToken1 = IERC20(token1).balanceOf(users.alice);
-
-        /// Add liquidity
+    function addLiquidity() public {
         uint256 depositToken0 = 1000 * 1e6;
         uint256 depositToken1 = 1 * 1e18;
 
@@ -42,6 +44,10 @@ contract CswapPairTest is BaseTest {
 
         pair.mint(users.alice);
         console.log("Alice LP", pair.balanceOf(users.alice));
+    }
+
+    function testMintSwap() public {
+        vm.startPrank(users.alice);
 
         /// Test swap token0 to token1
         uint256 amountIn = 100 * 1e6;
@@ -55,8 +61,8 @@ contract CswapPairTest is BaseTest {
         console2.log("Alice token0", IERC20(token0).balanceOf(users.alice) / 1e3);
         console2.log("Alice token1", IERC20(token1).balanceOf(users.alice) / 1e15);
 
-        assertEq(IERC20(token0).balanceOf(users.alice), initialToken0 - depositToken0 - amountIn);
-        assertEq(IERC20(token1).balanceOf(users.alice), initialToken1 - depositToken1 + amountOut);
+        assertEq(IERC20(token0).balanceOf(users.alice), initialAmount0 - depositToken0 - amountIn);
+        assertEq(IERC20(token1).balanceOf(users.alice), initialAmount1 - depositToken1 + amountOut);
     }
 
     // given an input amount of an asset and pair reserves, returns the maximum output amount of the other asset
