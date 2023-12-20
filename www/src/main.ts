@@ -2,7 +2,7 @@ import { createWeb3Modal } from '@web3modal/wagmi'
 import { walletConnectProvider, EIP6963Connector  } from '@web3modal/wagmi'
 import { configureChains, createConfig } from '@wagmi/core'
 import { getNetwork, watchNetwork, switchNetwork, watchBlockNumber, disconnect } from '@wagmi/core'
-import { getAccount, fetchBalance, multicall, readContract, writeContract, prepareWriteContract } from '@wagmi/core'
+import { getAccount, fetchBalance, fetchToken, multicall, readContract, writeContract, prepareWriteContract } from '@wagmi/core'
 import { watchMulticall, watchAccount, watchContractEvent } from '@wagmi/core'
 import { publicProvider } from '@wagmi/core/providers/public'
 import { jsonRpcProvider } from '@wagmi/core/providers/jsonRpc'
@@ -72,15 +72,29 @@ function highlight(element:any) {
 
 // 1. Define constants
 const projectId = import.meta.env.VITE_WC3_PROJECT_ID
-const [token0Symbol, token0Decimals, token0Address] = import.meta.env.VITE_TOKEN0.split(';')
-const [token1Symbol, token1Decimals, token1Address] = import.meta.env.VITE_TOKEN1.split(';')
+
+const token0Address = import.meta.env.VITE_TOKEN0
+const token1Address = import.meta.env.VITE_TOKEN1
 const poolManagerAddress = import.meta.env.VITE_POOL
-const tokenPairDecimals = 18
+let token0:any
+let token1:any
+
 const feePct = 4
 let reserves = [0, 0]
 let tokenPairAddress:`0x${string}`
+const tokenPairDecimals = 18
 let userAddress:`0x${string}`
 let userBalance:number = 0
+
+import htmlTemplate from '../src/main.html?raw'
+let template = htmlTemplate
+template = template.replace(/{cswapLogo}/g, cswapLogo)
+template = template.replace(/{token0Address}/g, token0Address)
+template = template.replace(/{token1Address}/g, token1Address)
+template = template.replace(/{poolManagerAddress}/g, poolManagerAddress)
+template = template.replace(/{feePct}/g, feePct.toString())
+$('#app').html(template)
+
 
 declare global {
   interface Number {
@@ -94,245 +108,6 @@ Number.prototype.round = function(digits:number) {
 Number.prototype.floor = function() {
   return Math.floor(Number(this))
 }
-
-const template = `
-<header>
-  <div class="row">
-    <div class="col-6">
-      <div id="logo">
-        <a href="/" target="_blank">
-          <img src="${cswapLogo}" class="logo vanilla" alt="Cswap logo" />
-        </a>
-      </div>
-    </div>
-    <div class="col-6 mt-3">
-      <div class="row flex-row-reverse">
-        <div class="col-auto">
-          <w3m-network-button />
-        </div>
-        <div class="col-auto">
-          <w3m-button />
-        </div>
-      </div>
-    </div>
-  </div>
-</header>
-<main class="container">
-  <div class="main-wrapper">
-    <div class="main-content">
-      <div class="row mb-4">
-        <div class="col">
-          <span id="networkStatus" style="display:none">Connected to: <span class="badge bg-dark fs-6" id="networkName"></span></span>
-          <button class="btn btn-primary btnConnect" id="btnConnect">Connect</button>
-          <button class="btn btn-primary" id="btnSwitchNetwork" style="display:none">Switch to Sepolia</button>
-          <span id="blockNumberWrapper" style="display:none">
-            Block number: <span class="badge bg-dark fs-6" id="blockNumber"></span>
-          </span>
-        </div>
-      </div>
-
-      <hr class="mb-4">
-
-      <div class="row mb-4">
-        <div class="col text-center">
-          <h1>Welcome to Cswap!</h1>
-          Wanna try our new token? Be one of the first 1000 users to claim it!
-        </div>
-      </div>
-
-      <div class="row mb-4 accountStatus error" style="display:none">
-        <div class="col-md-8 offset-md-2 text-center">
-          <div class="alert alert-secondary mb-0">
-            error reading contracts
-          </div>
-        </div>
-      </div>
-      <div class="row mb-4 accountStatus disconnected">
-        <div class="col-md-8 offset-md-2 text-center">
-          <div class="alert alert-secondary mb-0">
-            Please <a href="#" class="btnConnect" />connect</a> your wallet!
-          </div>
-        </div>
-      </div>
-      <div class="row mb-4 accountStatus unclaimed" style="display:none">
-        <div class="col-md-6 offset-md-3">
-          <button class="btn btn-primary btn-lg w-100" id="btnClaimAirdrop">
-            <span class="spinner spinner-border spinner-border-sm" style="display:none"></span>
-            Get the Airdrop!
-          </button>
-        </div>
-      </div>
-      <div class="row mb-5 accountStatus claimed" style="display:none">
-        <div class="col-md-8 offset-md-2 text-center">
-          <div class="alert alert-warning mb-0">
-            Already claimed. <a href="https://twitter.com/intent/tweet?text=Just got my free airdrop on Cswap, get yours! http://cswap.io" target="_blank">Spread the word!</a>
-          </div>
-        </div>
-      </div>
-      <div class="row mb-4">
-        <div class="col">
-          You have <span class="badge bg-dark fs-6" id="userToken0Balance">0</span> <a href="https://sepolia.etherscan.io/address/${token0Address}" target="_blank">${token0Symbol}</a> and <span class="badge bg-dark fs-6" id="userToken1Balance">0</span> <a href="https://sepolia.etherscan.io/address/${token1Address}" target="_blank">${token1Symbol}</a> &nbsp; <button class="btn btn-primary btn-sm" id="btnGetBalances">
-            <span class="spinner spinner-border spinner-border-sm" style="display:none"></span>
-            Update balances
-          </button>
-        </div>
-      </div>
-
-      <hr class="mb-4">
-
-      <div class="row mb-3">
-        <div class="col">
-          <h3>
-            Our pool
-          </h3>
-        </div>
-      </div>
-      <div class="row mb-3">
-        <div class="col">
-          <a href="https://sepolia.etherscan.io/address/${poolManagerAddress}" target="_blank">Pool</a> liquidity: <span class="badge bg-dark fs-6" id="poolLiquidity"></span>
-        </div>
-      </div>
-      <div class="row mb-3">
-        <div class="col">
-          Do you want to be a liquidity provider? Get some tokens and deposit to the pool!<br>
-          You will earn ${feePct}% of the fees generated by the pool.
-        </div>
-      </div>
-      <div class="row mb-2">
-        <div class="col-md-3">
-          ${token0Symbol} to deposit
-        </div>
-        <div class="col-md-5">
-          <div class="input-group">
-            <input id="token0DepositAmount" type="text" class="form-control" placeholder="">
-            <button id="btnDeposit0Amount50" class="btn btn-outline-secondary btn-sm" type="button">50%</button>
-            <button id="btnDeposit0Amount100" class="btn btn-outline-secondary btn-sm" type="button">100%</button>
-          </div>
-        </div>
-      </div>
-      <div class="row">
-        <div class="col-md-3">
-          ${token1Symbol} to deposit
-        </div>
-        <div class="col-md-5 mb-3">
-          <div class="input-group">
-            <input id="token1DepositAmount" type="text" class="form-control" placeholder="">
-            <button id="btnDeposit1Amount50" class="btn btn-outline-secondary btn-sm" type="button">50%</button>
-            <button id="btnDeposit1Amount100" class="btn btn-outline-secondary btn-sm" type="button">100%</button>
-          </div>
-        </div>
-        <div class="col-md-4">
-          <button class="btn btn-primary w-100" id="btnAddLiquidity">
-            <span class="spinner spinner-border spinner-border-sm" style="display:none"></span>
-            Add liquidity
-          </button>
-        </div>
-      </div>
-
-      <hr class="mb-4">
-
-      <div class="row mb-3">
-        <div class="col">
-          <h3>
-            Your liquidity
-          </h3>
-        </div>
-      </div>
-      <div class="row mb-2">
-        <div class="col">
-          Your Pool balance: <span class="badge bg-dark fs-6" id="userPoolBalance"></span><br>
-          You can recover your assets plus rewards at any time.
-        </div>
-      </div>
-      <div class="row mb-2">
-        <div class="col-md-3">
-          LP to withdraw
-        </div>
-        <div class="col-md-5 mb-3">
-          <div class="input-group">
-            <input id="poolRemoveAmount" type="text" class="form-control" placeholder="">
-            <button id="btnPoolRemoveAmount50" class="btn btn-outline-secondary btn-sm" type="button">50%</button>
-            <button id="btnPoolRemoveAmount100" class="btn btn-outline-secondary btn-sm" type="button">100%</button>
-          </div>
-        </div>
-        <div class="col-md-4">
-          <button class="btn btn-primary w-100" id="btnRemoveLiquidity">
-            <span class="spinner spinner-border spinner-border-sm" style="display:none"></span>
-            Remove liquidity
-          </button>
-        </div>
-      </div>
-
-      <hr class="mb-4">
-
-      <div class="row mb-3">
-        <div class="col">
-          <h3>
-            Trade tokens
-          </h3>
-          Do you want to sell your well-earned tokens or buy more? You can do it here!
-        </div>
-      </div>
-      <ul class="nav nav-pills mb-3" id="pills-tab" role="tablist">
-        <li class="nav-item">
-          <a class="nav-link active" id="btnSell" data-toggle="pill" href="#" role="tab" aria-controls="pills-home" aria-selected="true">Sell ${token0Symbol}</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" id="btnBuy" data-toggle="pill" href="#" role="tab" aria-controls="pills-profile" aria-selected="false">Buy ${token0Symbol}</a>
-        </li>
-      </ul>
-
-      <div class="row mb-2">
-        <div class="col-md-3">
-          <span id="tokenIn">${token0Symbol}</span> amount
-        </div>
-        <div class="col-md-5">
-          <div class="input-group">
-            <input id="tokenInSwapAmount" type="text" class="form-control" placeholder="">
-            <button id="btnSwapInAmount50" class="btn btn-outline-secondary btn-sm" type="button">50%</button>
-            <button id="btnSwapInAmount100" class="btn btn-outline-secondary btn-sm" type="button">100%</button>
-          </div>
-        </div>
-      </div>
-      <div class="row mb-2">
-        <div class="col-md-3">
-          <span id="tokenOut">${token1Symbol}</span> amount
-        </div>
-        <div class="col-md-5 mb-3">
-          <div class="input-group">
-            <input id="tokenOutSwapAmount" type="text" class="form-control" placeholder="">
-          </div>
-        </div>
-        <div class="col-md-4">
-          <button class="btn btn-primary w-100" id="btnSwap">
-            <span class="spinner spinner-border spinner-border-sm" style="display:none"></span>
-            Swap
-          </button><br>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="position-fixed p-3 top-0 start-50 translate-middle-x" style="z-index: 11">
-    <div id="toastTemplate" class="toast hide" role="alert">
-        <div class="toast-header">
-        <strong class="me-auto">Cswap</strong>
-        <small>just now</small>
-        <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
-      </div>
-      <div class="toast-body">
-        %message%
-      </div>
-    </div>
-  </div>
-</main>
-<footer>
-  <div class="footer-content">
-    &copy; <a href="https://github.com/ceseshi/Cswap-DEX" target="_blank">Cswap 2023</a>
-  </div>
-</footer>
-`
-$('#app').html(template)
 
 /**
  * WEB3MODAL
@@ -410,12 +185,12 @@ let unwatchMulticallBalances:any
 
 let getMulticallBalancesContracts:any = function() {
   return [{
-    address: token0Address,
+    address: token0.address,
     functionName: 'balanceOf',
     abi: CswapTokenABI,
     args: [userAddress]
   }, {
-    address: token1Address,
+    address: token1.address,
     functionName: 'balanceOf',
     abi: CswapTokenABI,
     args: [userAddress]
@@ -433,7 +208,7 @@ let getMulticallBalancesContracts:any = function() {
     functionName: 'getReserves',
     abi: CswapTokenPairABI
   },{
-    address: token0Address,
+    address: token0.address,
     functionName: 'claimed',
     abi: CswapTokenABI,
     args: [userAddress]
@@ -532,7 +307,22 @@ watchAccount(async account => {
       console.error("tokenPairAddress not found:", (err.cause.name == "ContractFunctionZeroDataError") ? "verify poolManagerAddress" : err)
     }) as any
 
-    if (!userAddress || !tokenPairAddress) return
+    token0 = await fetchToken({
+      address: token0Address
+    }).catch(err => {
+      console.error("token0 contract not found:", err)
+    }) as any
+
+    token1 = await fetchToken({
+      address: token1Address
+    }).catch(err => {
+      console.error("token1 contract not found:", err)
+    }) as any
+
+    if (!userAddress || !tokenPairAddress || !token0 || !token1) return
+
+    $('.token0Symbol').text(token0.symbol)
+    $('.token1Symbol').text(token1.symbol)
 
     $('#btnSell.active, #btnBuy.active').trigger('click')
 
@@ -659,7 +449,7 @@ $('#btnGetBalances').on('click', () => {
 
 $('#btnDeposit0Amount50').on('click', () => {
   let userToken0Balance = parseFloat($('#userToken0Balance').data('balance'))||0
-  $('#token0DepositAmount').val((userToken0Balance / 2).round(token0Decimals))
+  $('#token0DepositAmount').val((userToken0Balance / 2).round(token0.decimals))
   $('#token0DepositAmount').trigger('change')
 })
 $('#btnDeposit0Amount100').on('click', () => {
@@ -669,7 +459,7 @@ $('#btnDeposit0Amount100').on('click', () => {
 })
 $('#btnDeposit1Amount50').on('click', () => {
   let userToken1Balance = parseFloat($('#userToken1Balance').data('balance'))||0
-  $('#token1DepositAmount').val((userToken1Balance / 2).round(token1Decimals))
+  $('#token1DepositAmount').val((userToken1Balance / 2).round(token1.decimals))
   $('#token1DepositAmount').trigger('change')
 })
 $('#btnDeposit1Amount100').on('click', () => {
@@ -687,14 +477,14 @@ $('#btnPoolRemoveAmount100').on('click', () => {
 })
 
 $('#btnSwapInAmount50').on('click', () => {
-  let tokenInBalance = $('#tokenIn').data('symbol') == token1Symbol ? $('#userToken1Balance').data('balance') : $('#userToken0Balance').data('balance')
-  let tokenInDecimals = $('#tokenIn').data('symbol') == token1Symbol ? token1Decimals : token0Decimals
+  let tokenInBalance = $('#tokenIn').data('symbol') == token1.symbol ? $('#userToken1Balance').data('balance') : $('#userToken0Balance').data('balance')
+  let tokenInDecimals = $('#tokenIn').data('symbol') == token1.symbol ? token1.decimals : token0.decimals
   tokenInBalance = parseFloat(tokenInBalance)||0
   $('#tokenInSwapAmount').val((tokenInBalance / 2).round(tokenInDecimals))
   $('#tokenInSwapAmount').trigger('change')
 })
 $('#btnSwapInAmount100').on('click', () => {
-  let tokenInBalance = $('#tokenIn').data('symbol') == token1Symbol ? $('#userToken1Balance').data('balance') : $('#userToken0Balance').data('balance')
+  let tokenInBalance = $('#tokenIn').data('symbol') == token1.symbol ? $('#userToken1Balance').data('balance') : $('#userToken0Balance').data('balance')
   tokenInBalance = parseFloat(tokenInBalance)||0
   $('#tokenInSwapAmount').val(tokenInBalance)
   $('#tokenInSwapAmount').trigger('change')
@@ -706,7 +496,7 @@ $('#btnClaimAirdrop').on('click', () => {
   let myToast = toast('Please approve claim operation in your wallet.<br>Raise gas fee if network is congested.')
   $('#btnClaimAirdrop').find('.spinner').show()
   const unwatch = watchContractEvent({
-    address: token0Address,
+    address: token0.address,
     abi: CswapTokenABI,
     eventName: 'Transfer',
   }, (log:any) => {
@@ -723,7 +513,7 @@ $('#btnClaimAirdrop').on('click', () => {
   }
 
   writeContract({
-    address: token0Address,
+    address: token0.address,
     functionName: 'claim',
     args: [],
     abi: CswapTokenABI
@@ -755,25 +545,25 @@ $('#btnAddLiquidity').on('click', async() => {
   }
 
   if (amountToken0 > parseFloat($('#userToken0Balance').data('balance'))||0) {
-    popover($('#token0DepositAmount'), "You don't have enough " + token0Symbol + " to deposit!")
+    popover($('#token0DepositAmount'), "You don't have enough " + token0.symbol + " to deposit!")
     return
   }
   else if (amountToken1 > parseFloat($('#userToken1Balance').data('balance'))||0) {
-    popover($('#token1DepositAmount'), "You don't have enough " + token1Symbol + " to deposit!")
+    popover($('#token1DepositAmount'), "You don't have enough " + token1.symbol + " to deposit!")
     return
   }
 
-  amountToken0 = (amountToken0 * 10**token0Decimals).floor()
-  amountToken1 = (amountToken1 * 10**token1Decimals).floor()
+  amountToken0 = (amountToken0 * 10**token0.decimals).floor()
+  amountToken1 = (amountToken1 * 10**token1.decimals).floor()
 
   await multicall({
     contracts: [{
-      address: token0Address,
+      address: token0.address,
       functionName: 'allowance',
       abi: CswapTokenABI as any,
       args: [userAddress, poolManagerAddress]
     },{
-      address: token1Address,
+      address: token1.address,
       functionName: 'allowance',
       abi: CswapTokenABI as any,
       args: [userAddress, poolManagerAddress]
@@ -795,7 +585,7 @@ function doAddLiquidity1(allowances:any, amountToken0:number, amountToken1:numbe
     let myToast = toast('Please approve allowance operation in your wallet.<br>Raise gas fee if network is congested.')
     $('#btnAddLiquidity').find('.spinner').show()
     const unwatch = watchContractEvent({
-      address: token0Address,
+      address: token0.address,
       abi: CswapTokenABI,
       eventName: 'Approval',
     }, (log:any) => {
@@ -812,7 +602,7 @@ function doAddLiquidity1(allowances:any, amountToken0:number, amountToken1:numbe
     }
 
     writeContract({
-      address: token0Address,
+      address: token0.address,
       functionName: 'approve',
       args: [poolManagerAddress, amountToken0],
       abi: CswapTokenABI
@@ -839,7 +629,7 @@ function doAddLiquidity2(allowances:any, amountToken0:number, amountToken1:numbe
     let myToast = toast('Please approve allowance operation in your wallet.<br>Raise gas fee if network is congested.')
     $('#btnAddLiquidity').find('.spinner').show()
     const unwatch = watchContractEvent({
-      address: token1Address,
+      address: token1.address,
       abi: CswapTokenABI,
       eventName: 'Approval',
     }, (log:any) => {
@@ -856,7 +646,7 @@ function doAddLiquidity2(allowances:any, amountToken0:number, amountToken1:numbe
     }
 
     writeContract({
-      address: token1Address,
+      address: token1.address,
       functionName: 'approve',
       args: [poolManagerAddress, amountToken1],
       abi: CswapTokenABI
@@ -1036,7 +826,7 @@ function doRemoveLiquidity(amountTokenPair:number) {
 
 $('#token0DepositAmount').on('change', () => {
   let amountDeposit0 = parseFloat($('#token0DepositAmount').val() as string)||0
-  let amountDeposit1 = reserves[1] ? getQuote(amountDeposit0, reserves[0] / 10**token0Decimals, reserves[1] / 10**token1Decimals).round(token1Decimals) : 0
+  let amountDeposit1 = reserves[1] ? getQuote(amountDeposit0, reserves[0] / 10**token0.decimals, reserves[1] / 10**token1.decimals).round(token1.decimals) : 0
   $('#token1DepositAmount').val(amountDeposit1)
 })
 $('#token0DepositAmount').on('keyup', () => {
@@ -1045,7 +835,7 @@ $('#token0DepositAmount').on('keyup', () => {
 
 $('#token1DepositAmount').on('change', () => {
   let amountDeposit1 = parseFloat($('#token1DepositAmount').val() as string)||0
-  let amountDeposit0 = reserves[0] ? getQuote(amountDeposit1, reserves[1] / 10**token1Decimals, reserves[0] / 10**token0Decimals).round(token0Decimals) : 0
+  let amountDeposit0 = reserves[0] ? getQuote(amountDeposit1, reserves[1] / 10**token1.decimals, reserves[0] / 10**token0.decimals).round(token0.decimals) : 0
   $('#token0DepositAmount').val(amountDeposit0)
 })
 $('#token1DepositAmount').on('keyup', () => {
@@ -1062,7 +852,7 @@ function setUserToken0Balance(balance:number|string) {
     $('#userToken0Balance').text(balance)
     $('#userToken0Balance').data('balance', null)
   } else {
-    let balance2 = balance / 10**token0Decimals
+    let balance2 = balance / 10**token0.decimals
     if (balance2 != $('#userToken0Balance').data('balance')) {
       $('#userToken0Balance').text(balance2.round(6))
       $('#userToken0Balance').data('balance', balance2)
@@ -1076,7 +866,7 @@ function setUserToken1Balance(balance:number|string) {
     $('#userToken1Balance').text(balance)
     $('#userToken1Balance').data('balance', null)
   } else {
-    let balance2 = balance / 10**token1Decimals
+    let balance2 = balance / 10**token1.decimals
     if (balance2 != $('#userToken1Balance').data('balance')) {
       $('#userToken1Balance').text(balance2.round(6))
       $('#userToken1Balance').data('balance', balance2)
@@ -1091,7 +881,7 @@ function setUserPoolBalance(balance:number|string, assetsToken0?:any, assetsToke
     $('#userPoolBalance').data('balance', null)
   } else {
     let balance2 = balance / 10**tokenPairDecimals
-    let text = '<span title="'+balance2+'">'+balance2.round(6) + ' LP</span> (' + assetsToken0 + ' ' + token0Symbol + " + " + (assetsToken1 / 10**token1Decimals).round(6) + ' ' + token1Symbol + ')'
+    let text = '<span title="'+balance2+'">'+balance2.round(6) + ' LP</span> (' + assetsToken0 + ' ' + token0.symbol + " + " + (assetsToken1 / 10**token1.decimals).round(6) + ' ' + token1.symbol + ')'
     if (text != $('#userPoolBalance').data('text')) {
       $('#userPoolBalance').html(text)
       $('#userPoolBalance').data('balance', balance2)
@@ -1107,7 +897,7 @@ function setPoolLiquidity(totalSupply:number|string, reserveToken0?:any, reserve
     $('#poolLiquidity').data('balance', null)
   } else {
     let balance2 = totalSupply / 10**tokenPairDecimals
-    let text = '<span title="'+balance2+'">'+balance2.round(6) + ' LP</span> (' + (reserveToken0 / 10**token0Decimals).round(6) + ' ' + token0Symbol + " + " + (reserveToken1 / 10**token1Decimals).round(6) + ' ' + token1Symbol + ')'
+    let text = '<span title="'+balance2+'">'+balance2.round(6) + ' LP</span> (' + (reserveToken0 / 10**token0.decimals).round(6) + ' ' + token0.symbol + " + " + (reserveToken1 / 10**token1.decimals).round(6) + ' ' + token1.symbol + ')'
     if (text != $('#poolLiquidity').data('text')) {
       $('#poolLiquidity').html(text)
       $('#poolLiquidity').data('balance', balance2)
@@ -1126,18 +916,15 @@ $('#btnSell').on('click', (event) => {
   $('#btnBuy').removeClass('active')
   $('#btnSell').addClass('active')
 
-  $('#tokenIn').text(token0Symbol)
-  $('#tokenIn').data('symbol', token0Symbol)
-  $('#tokenOut').text(token1Symbol)
-  $('#tokenOut').data('symbol', token1Symbol)
+  $('#tokenIn').text(token0.symbol)
+  $('#tokenIn').data('symbol', token0.symbol)
+  $('#tokenOut').text(token1.symbol)
+  $('#tokenOut').data('symbol', token1.symbol)
 
   if ($('#tokenInSwapAmount').val()) {
     $('#tokenInSwapAmount').val(parseFloat($('#userToken0Balance').data('balance'))||0).trigger('change')
   }
 })
-
-$('#tokenIn').data('symbol', token0Symbol)
-$('#tokenOut').data('symbol', token1Symbol)
 
 $('#btnBuy').on('click', (event) => {
   event.preventDefault()
@@ -1145,10 +932,10 @@ $('#btnBuy').on('click', (event) => {
   $('#btnBuy').addClass('active')
   $('#btnSell').removeClass('active')
 
-  $('#tokenIn').text(token1Symbol)
-  $('#tokenIn').data('symbol', token1Symbol)
-  $('#tokenOut').text(token0Symbol)
-  $('#tokenOut').data('symbol', token0Symbol)
+  $('#tokenIn').text(token1.symbol)
+  $('#tokenIn').data('symbol', token1.symbol)
+  $('#tokenOut').text(token0.symbol)
+  $('#tokenOut').data('symbol', token0.symbol)
 
   if ($('#tokenInSwapAmount').val()) {
     $('#tokenInSwapAmount').val(parseFloat($('#userToken1Balance').data('balance'))||0).trigger('change')
@@ -1158,9 +945,9 @@ $('#btnBuy').on('click', (event) => {
 $('#tokenInSwapAmount').on('change', () => {
   if (!checkConnect()) return
 
-  let [tokenInDecimals, tokenOutDecimals] = $('#tokenIn').data('symbol') == token1Symbol ? [token1Decimals, token0Decimals] : [token0Decimals, token1Decimals]
+  let [tokenInDecimals, tokenOutDecimals] = $('#tokenIn').data('symbol') == token1.symbol ? [token1.decimals, token0.decimals] : [token0.decimals, token1.decimals]
   let amountIn = (parseFloat($('#tokenInSwapAmount').val() as string)||0) * 10**tokenInDecimals
-  let [reserveIn, reserveOut] = $('#tokenIn').data('symbol') == token1Symbol ? [reserves[1], reserves[0]] : [reserves[0], reserves[1]]
+  let [reserveIn, reserveOut] = $('#tokenIn').data('symbol') == token1.symbol ? [reserves[1], reserves[0]] : [reserves[0], reserves[1]]
   let amountOut = reserveIn ? getAmountOut(amountIn, reserveIn, reserveOut, feePct) : 0
   $('#tokenOutSwapAmount').val((amountOut / 10**tokenOutDecimals).round(tokenOutDecimals))
 })
@@ -1171,9 +958,9 @@ $('#tokenInSwapAmount').on('keyup', () => {
 $('#tokenOutSwapAmount').on('change', () => {
   if (!checkConnect()) return
 
-  let [tokenInDecimals, tokenOutDecimals] = $('#tokenIn').data('symbol') == token1Symbol ? [token1Decimals, token0Decimals] : [token0Decimals, token1Decimals]
+  let [tokenInDecimals, tokenOutDecimals] = $('#tokenIn').data('symbol') == token1.symbol ? [token1.decimals, token0.decimals] : [token0.decimals, token1.decimals]
   let amountOut = (parseFloat($('#tokenOutSwapAmount').val() as string)||0) * 10**tokenOutDecimals
-  let [reserveIn, reserveOut] = $('#tokenIn').data('symbol') == token1Symbol ? [reserves[1], reserves[0]] : [reserves[0], reserves[1]]
+  let [reserveIn, reserveOut] = $('#tokenIn').data('symbol') == token1.symbol ? [reserves[1], reserves[0]] : [reserves[0], reserves[1]]
   let amountIn = reserveOut ? getAmountIn(amountOut, reserveOut, reserveIn, feePct) : 0
   $('#tokenInSwapAmount').val((amountIn / 10**tokenInDecimals).round(tokenInDecimals))
 })
@@ -1184,8 +971,8 @@ $('#tokenOutSwapAmount').on('keyup', () => {
 $('#btnSwap').on('click', async() => {
   if (!checkConnect()) return
 
-  let tokenInDecimals = $('#tokenIn').data('symbol') == token1Symbol ? token1Decimals : token0Decimals
-  let tokenOutDecimals = $('#tokenOut').data('symbol') == token1Symbol ? token1Decimals : token0Decimals
+  let tokenInDecimals = $('#tokenIn').data('symbol') == token1.symbol ? token1.decimals : token0.decimals
+  let tokenOutDecimals = $('#tokenOut').data('symbol') == token1.symbol ? token1.decimals : token0.decimals
 
   let amountTokenIn = parseFloat($('#tokenInSwapAmount').val() as string)||0
   let amountTokenOut = parseFloat($('#tokenOutSwapAmount').val() as string)||0
@@ -1195,7 +982,7 @@ $('#btnSwap').on('click', async() => {
     return
   }
 
-  let balanceTokenIn = $('#tokenIn').data('symbol') == token1Symbol ? $('#userToken1Balance').data('balance') : $('#userToken0Balance').data('balance')
+  let balanceTokenIn = $('#tokenIn').data('symbol') == token1.symbol ? $('#userToken1Balance').data('balance') : $('#userToken0Balance').data('balance')
   balanceTokenIn = parseFloat(balanceTokenIn)||0
   if (amountTokenIn > balanceTokenIn) {
     popover($('#tokenInSwapAmount'), "You don't have enough " + $('#tokenIn').data('symbol') + " to swap!")
@@ -1208,7 +995,7 @@ $('#btnSwap').on('click', async() => {
   amountTokenOut = (amountTokenOut * 10**tokenOutDecimals).floor()
   let minAmountTokenOut = (amountTokenOut - amountTokenOut / 100).floor()
 
-  let tokenInAddress = $('#tokenIn').data('symbol') == token1Symbol ? token1Address : token0Address
+  let tokenInAddress = $('#tokenIn').data('symbol') == token1.symbol ? token1.address : token0.address
   let allowance = await readContract({
     address: tokenInAddress,
     functionName: 'allowance',
@@ -1271,14 +1058,13 @@ async function doSwap1(tokenInAddress:any, amountTokenIn:number, amountTokenOut:
     args: [tokenInAddress, amountTokenIn, minAmountTokenOut],
     abi: CswapPoolManagerABI
   }).catch(err => {
-    //bootbox.alert(err.shortMessage)
     console.log("prepareSwap: ", err)
   })
 
   if (prepareSwap === undefined) return
 
   let simulateAmountOut = Number(prepareSwap.result)
-  let tokenOutDecimals = $('#tokenOut').data('symbol') == token1Symbol ? token1Decimals : token0Decimals
+  let tokenOutDecimals = $('#tokenOut').data('symbol') == token1.symbol ? token1.decimals : token0.decimals
 
   if (simulateAmountOut.round(tokenOutDecimals-3) == amountTokenOut.round(tokenOutDecimals-3)) {
     doSwap2(prepareSwap)

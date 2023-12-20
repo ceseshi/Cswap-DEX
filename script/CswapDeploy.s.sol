@@ -63,8 +63,8 @@ contract CswapDeploy is Script {
         console.log("Pool:", address(poolManager));
 
         vm.writeFile("./tmp/vite.env", "");
-        vm.writeLine("./tmp/vite.env", string.concat("VITE_TOKEN0=", token0.symbol(), ";", vm.toString(token0.decimals()), ";", vm.toString(address(token0))));
-        vm.writeLine("./tmp/vite.env", string.concat("VITE_TOKEN1=", token1.symbol(), ";", vm.toString(token1.decimals()), ";", vm.toString(address(token1))));
+        vm.writeLine("./tmp/vite.env", string.concat("VITE_TOKEN0=", vm.toString(address(token0))));
+        vm.writeLine("./tmp/vite.env", string.concat("VITE_TOKEN1=", vm.toString(address(token1))));
         vm.writeLine("./tmp/vite.env", string.concat("VITE_POOL=", vm.toString(address(poolManager))));
     }
 }
