@@ -1,13 +1,13 @@
-pragma solidity ^0.8.19;
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.23;
 
-import "./CswapERC20.sol";
 import "./libraries/Math.sol";
 import "./libraries/UQ112x112.sol";
-import "./interfaces/IERC20.sol";
+//import "./interfaces/IERC20.sol";
 //import "./interfaces/IUniswapV2Callee.sol";
+import "openzeppelin/token/ERC20/ERC20.sol";
 
-contract CswapPair is CswapERC20 {
-    using SafeMath for uint256;
+contract CswapTokenPair is ERC20 {
     using UQ112x112 for uint224;
 
     uint256 public constant MINIMUM_LIQUIDITY = 10 ** 3;
@@ -16,6 +16,7 @@ contract CswapPair is CswapERC20 {
     address public factory;
     address public token0;
     address public token1;
+    uint8 immutable feePct;
 
     uint112 private reserve0; // uses single storage slot, accessible via getReserves
     uint112 private reserve1; // uses single storage slot, accessible via getReserves
@@ -33,18 +34,7 @@ contract CswapPair is CswapERC20 {
         unlocked = 1;
     }
 
-    function getReserves() public view returns (uint112 _reserve0, uint112 _reserve1, uint32 _blockTimestampLast) {
-        _reserve0 = reserve0;
-        _reserve1 = reserve1;
-        _blockTimestampLast = blockTimestampLast;
-    }
-
-    function _safeTransfer(address token, address to, uint256 value) private {
-        (bool success, bytes memory data) = token.call(abi.encodeWithSelector(SELECTOR, to, value));
-        require(success && (data.length == 0 || abi.decode(data, (bool))), "Cswap: TRANSFER_FAILED");
-    }
-
-    event Mint(address indexed sender, uint256 amount0, uint256 amount1);
+    event Mint(address indexed sender, uint256 amount0, uint256 amount1, address indexed to);
     event Burn(address indexed sender, uint256 amount0, uint256 amount1, address indexed to);
     event Swap(
         address indexed sender,
@@ -56,8 +46,20 @@ contract CswapPair is CswapERC20 {
     );
     event Sync(uint112 reserve0, uint112 reserve1);
 
-    constructor() {
+    constructor(uint8 _feePct) ERC20("Cswap LP Token", "CSWAP-LP") {
         factory = msg.sender;
+        feePct = _feePct;
+    }
+
+    function getReserves() public view returns (uint112 _reserve0, uint112 _reserve1, uint32 _blockTimestampLast) {
+        _reserve0 = reserve0;
+        _reserve1 = reserve1;
+        _blockTimestampLast = blockTimestampLast;
+    }
+
+    function _safeTransfer(address token, address to, uint256 value) private {
+        (bool success, bytes memory data) = token.call(abi.encodeWithSelector(SELECTOR, to, value));
+        require(success && (data.length == 0 || abi.decode(data, (bool))), "Cswap: TRANSFER_FAILED");
     }
 
     // called once by the factory at time of deployment
@@ -88,21 +90,21 @@ contract CswapPair is CswapERC20 {
         (uint112 _reserve0, uint112 _reserve1,) = getReserves(); // gas savings
         uint256 balance0 = IERC20(token0).balanceOf(address(this));
         uint256 balance1 = IERC20(token1).balanceOf(address(this));
-        uint256 amount0 = balance0.sub(_reserve0);
-        uint256 amount1 = balance1.sub(_reserve1);
+        uint256 amount0 = balance0 - _reserve0;
+        uint256 amount1 = balance1 - _reserve1;
 
-        uint256 _totalSupply = totalSupply; // gas savings, must be defined here since totalSupply can update in _mintFee
+        uint256 _totalSupply = totalSupply(); // gas savings, must be defined here since totalSupply can update in _mintFee
         if (_totalSupply == 0) {
-            liquidity = Math.sqrt(amount0.mul(amount1)).sub(MINIMUM_LIQUIDITY);
-            _mint(address(0), MINIMUM_LIQUIDITY); // permanently lock the first MINIMUM_LIQUIDITY tokens
+            liquidity = Math.sqrt(amount0 * amount1) - MINIMUM_LIQUIDITY;
+            _mint(address(1), MINIMUM_LIQUIDITY); // permanently lock the first MINIMUM_LIQUIDITY tokens
         } else {
-            liquidity = Math.min(amount0.mul(_totalSupply) / _reserve0, amount1.mul(_totalSupply) / _reserve1);
+            liquidity = Math.min(amount0 * _totalSupply / _reserve0, amount1 * _totalSupply / _reserve1);
         }
-        require(liquidity > 0, "Cswap: INSUFFICIENT_LIQUIDITY_MINTED");
+        require(liquidity > 0, "Cswap: Insufficient Liquidity Minted");
         _mint(to, liquidity);
 
         _update(balance0, balance1, _reserve0, _reserve1);
-        emit Mint(msg.sender, amount0, amount1);
+        emit Mint(msg.sender, amount0, amount1, to);
     }
 
     // this low-level function should be called from a contract which performs important safety checks
@@ -112,11 +114,11 @@ contract CswapPair is CswapERC20 {
         address _token1 = token1; // gas savings
         uint256 balance0 = IERC20(_token0).balanceOf(address(this));
         uint256 balance1 = IERC20(_token1).balanceOf(address(this));
-        uint256 liquidity = balanceOf[address(this)];
+        uint256 liquidity = balanceOf(address(this));
 
-        uint256 _totalSupply = totalSupply; // gas savings, must be defined here since totalSupply can update in _mintFee
-        amount0 = liquidity.mul(balance0) / _totalSupply; // using balances ensures pro-rata distribution
-        amount1 = liquidity.mul(balance1) / _totalSupply; // using balances ensures pro-rata distribution
+        uint256 _totalSupply = totalSupply(); // gas savings, must be defined here since totalSupply can update in _mintFee
+        amount0 = liquidity * balance0 / _totalSupply; // using balances ensures pro-rata distribution
+        amount1 = liquidity * balance1 / _totalSupply; // using balances ensures pro-rata distribution
         require(amount0 > 0 && amount1 > 0, "Cswap: INSUFFICIENT_LIQUIDITY_BURNED");
         _burn(address(this), liquidity);
         _safeTransfer(_token0, to, amount0);
@@ -125,14 +127,14 @@ contract CswapPair is CswapERC20 {
         balance1 = IERC20(_token1).balanceOf(address(this));
 
         _update(balance0, balance1, _reserve0, _reserve1);
-        emit Burn(msg.sender, amount0, amount1, to);
+        emit Burn(to, amount0, amount1, to);
     }
 
     // this low-level function should be called from a contract which performs important safety checks
     function swap(uint256 amount0Out, uint256 amount1Out, address to) external lock {
-        require(amount0Out > 0 || amount1Out > 0, "Cswap: INSUFFICIENT_OUTPUT_AMOUNT");
+        require(amount0Out > 0 || amount1Out > 0, "Cswap: Insufficient Output Amount");
         (uint112 _reserve0, uint112 _reserve1,) = getReserves(); // gas savings
-        require(amount0Out < _reserve0 && amount1Out < _reserve1, "Cswap: INSUFFICIENT_LIQUIDITY");
+        require(amount0Out < _reserve0 && amount1Out < _reserve1, "Cswap: Insufficient Liquidity");
 
         uint256 balance0;
         uint256 balance1;
@@ -140,7 +142,7 @@ contract CswapPair is CswapERC20 {
             // scope for _token{0,1}, avoids stack too deep errors
             address _token0 = token0;
             address _token1 = token1;
-            require(to != _token0 && to != _token1, "Cswap: INVALID_TO");
+            require(to != _token0 && to != _token1, "Cswap: Invalid to address");
             if (amount0Out > 0) _safeTransfer(_token0, to, amount0Out); // optimistically transfer tokens
             if (amount1Out > 0) _safeTransfer(_token1, to, amount1Out); // optimistically transfer tokens
 
@@ -149,27 +151,24 @@ contract CswapPair is CswapERC20 {
         }
         uint256 amount0In = balance0 > _reserve0 - amount0Out ? balance0 - (_reserve0 - amount0Out) : 0;
         uint256 amount1In = balance1 > _reserve1 - amount1Out ? balance1 - (_reserve1 - amount1Out) : 0;
-        require(amount0In > 0 || amount1In > 0, "Cswap: INSUFFICIENT_INPUT_AMOUNT");
+        require(amount0In > 0 || amount1In > 0, "Cswap: Insufficient Input Amount");
         {
             // scope for reserve{0,1}Adjusted, avoids stack too deep errors
-            uint256 balance0Adjusted = balance0.mul(1000).sub(amount0In.mul(3));
-            uint256 balance1Adjusted = balance1.mul(1000).sub(amount1In.mul(3));
-            require(
-                balance0Adjusted.mul(balance1Adjusted) >= uint256(_reserve0).mul(_reserve1).mul(1000 ** 2),
-                "Cswap: K"
-            );
+            uint256 balance0Adjusted = balance0 * 1000 - amount0In * feePct;
+            uint256 balance1Adjusted = balance1 * 1000 - amount1In * feePct;
+            require(balance0Adjusted * balance1Adjusted >= uint256(_reserve0) * _reserve1 * 1000 ** 2, "Cswap: K");
         }
 
         _update(balance0, balance1, _reserve0, _reserve1);
-        emit Swap(msg.sender, amount0In, amount1In, amount0Out, amount1Out, to);
+        emit Swap(to, amount0In, amount1In, amount0Out, amount1Out, to);
     }
 
     // force balances to match reserves
     function skim(address to) external lock {
         address _token0 = token0; // gas savings
         address _token1 = token1; // gas savings
-        _safeTransfer(_token0, to, IERC20(_token0).balanceOf(address(this)).sub(reserve0));
-        _safeTransfer(_token1, to, IERC20(_token1).balanceOf(address(this)).sub(reserve1));
+        _safeTransfer(_token0, to, IERC20(_token0).balanceOf(address(this)) - reserve0);
+        _safeTransfer(_token1, to, IERC20(_token1).balanceOf(address(this)) - reserve1);
     }
 
     // force reserves to match balances
