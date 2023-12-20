@@ -1,16 +1,12 @@
-# Compiler files
+# Compiler
 cache/
 out/
-
-# Ignores development broadcast logs
+bin/
 broadcast/
+.env
 
 # Docs
 docs/
 
-# Dotenv file
-.env
-
-# More
-bin/
-tmp/*
+# Dapp
+tmp/
