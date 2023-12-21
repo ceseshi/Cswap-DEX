@@ -1,27 +1,39 @@
 # Cswap DEX
 
-This is my personal project for CodingHeroes / ThemarAcademy Solidity course.
+This is my personal project for CodingHeroes / ThemarAcademy Solidity bootcamp.
 
-I wanted to build a project that would help me to understand how Uniswap V2 works, being one of the most known blockchain solutions, and how the communication between the dapp and the smart contracts works, passing through the user wallet and the RPC calls. All this using the latest possible versions of each language and library.
+I wanted to build a dapp that would help me to understand how Uniswap V2 works, being one of the most known blockchain solutions, and how the communication between the dapp and the smart contracts works, passing through the user wallet and the RPC calls, controlling transaction amounts, API parameters and the events returned by the contracts. All this using the latest possible versions of each language and library.
 
-> Este es mi proyecto personal para el curso de Solidity de CodingHeroes / ThemarAcademy.
-> Quise realizar un proyecto que me ayudase a entender el funcionamiento de Uniswap V2, por ser una de las soluciones blockchain más conocidas, y cómo cómo funciona la comunicación entre la dapp y los smart contracts, pasando por la wallet del usuario y las llamadas al RPC. Todo ello usando las últimas versiones posibles de cada lenguaje y librería.
+It is not intended to be a real dapp, but a testing playground.
 
+> Este es mi proyecto personal para el bootcamp de Solidity de CodingHeroes / ThemarAcademy.
+> Quise realizar una dapp que me ayudase a entender el funcionamiento de Uniswap V2, por ser una de las soluciones blockchain más conocidas, y cómo cómo funciona la comunicación entre la dapp y los smart contracts, pasando por la wallet del usuario y las llamadas al RPC, controlando los importes de las transacciones, los parámetros de la API y los eventos que devuelven los contratos. Todo ello usando las últimas versiones posibles de cada lenguaje y librería.
+> No pretende ser una aplicación real, sino un campo de pruebas.
+
+# Demo site:
+
+<a href="https://cswapdex.vercel.app/" target="_blank">https://cswapdex.vercel.app</a>
+
+It is built on Sepolia, so you will need Sepolia ETH to test it. If you don't have it, the dapp will tell you where to get it.
+> Está construida sobre Sepolia, por lo que necesitarás Sepolia ETH para probarla. Si no lo tienes, la aplicación te dirá dónde conseguirlo.
 
 ## Interface
 
-For the interface I wanted to implement the latest version of [Web3modal](https://web3modal.com/), because of the new support for [EIP-6963](https://eips.ethereum.org/EIPS/eip-6963). Also, I wanted to try [Viem](https://viem.sh/docs/introduction.html) for its advantages over Ethers, such as [strong typing](https://viem.sh/docs/typescript.html), and having a low-level API with lower abstraction, which allows to see better what is going on behind.
+For the interface I wanted to implement the latest version of <a href="https://web3modal.com/" target="_blank">Web3modal</a>, because of the new support for <a href="https://eips.ethereum.org/EIPS/eip-6963" target="_blank">EIP-6963</a>. Also, I wanted to try <a href="https://viem.sh/docs/introduction.html" target="_blank">Viem</a> for its advantages over Ethers, such as <a href="https://viem.sh/docs/typescript.html" target="_blank">strong typing</a>, and having a low-level API with lower abstraction, which allows to see better what is going on behind.
 
 Seeing that Web3modal could be implemented with Wagmi/Core, and Wagmi uses Viem, this was a good combo. In the end I used the Wagmi/Core javascript API, which wraps and extends the Viem methods.
 
 I implemented the interface in Vanilla JS and Bootstrap CSS, as they have always allowed me to quickly layout and easily debug everything that happens in the browser, although the next project could be in Next.js and Tailwind CSS.
+
+I have not used any frontend framework, all transactions and inputs and events control have been developed from scratch following the documentation of each library.
 
 As bundler I chose Vite, for being easy to implement and having native support for Typescript and ES modules.
 
 > Para la interfaz me apetecía implementar la última versión de Web3modal, por el nuevo soporte para EIP-6963. Además, quería probar Viem por sus ventajas sobre Ethers, como el tipado fuerte, y el tener una API de bajo nivel con menor abstracción, que permite ver mejor lo que está pasando.
 > Viendo que Web3modal podía implementarse con Wagmi/Core, y que Wagmi usa Viem, este era el combo perfecto. Al final utilicé la API javascript de Wagmi/Core, que envuelve y extiende los métodos de Viem.
 > Implementé la interfaz en Vanilla JS y Bootstrap CSS, ya que siempre me han permitido maquetar rápido y depurar fácilmente todo lo que ocurre en el navegador, aunque el próximo proyecto podría ser en Next.js y Tailwind CSS.
->Como bundler elegí Vite, por ser fácil de implementar y tener soporte nativo para Typescript y ES modules.
+> No he utilizado ningún framework de frontend, toda la lógica de transacciones y el control de inputs y eventos han sido desarrollados desde cero siguiendo la documentación de cada librería.
+> Como empaquetador elegí Vite, por ser fácil de implementar y tener soporte nativo para Typescript y ES modules.
 
 # Smart contracts
 
@@ -83,9 +95,9 @@ The dapp controls at all times the amounts that the user enters, to prevent him 
 > 4. Remove: Cuando quieras recuperar tu depósito, retira todo o una parte, más las fees generadas.
 
 ## Prerequisites
-- [Node](https://nodejs.org/en/download/package-manager)
-- [Yarn](https://yarnpkg.com/getting-started/install)
-- [Foundry](https://book.getfoundry.sh/getting-started/installation)
+- <a href="https://nodejs.org/en/download/package-manager" target="_blank">Node</a>
+- <a href="https://yarnpkg.com/getting-started/install" target="_blank">Yarn</a>
+- <a href="https://book.getfoundry.sh/getting-started/installation" target="_blank">Foundry</a>
 
 ## Setup and Configuration
 - Contracts:
@@ -94,11 +106,19 @@ The dapp controls at all times the amounts that the user enters, to prevent him 
 	git clone https://github.com/ceseshi/Cswap-DEX.git
 	cd Cswap-DEX
 	```
-	2. Create a Sepolia project in [Alchemy](https://www.alchemy.com/) and get the RPC url
-	3. Write the RPC url to .env file
-	4. Run a local fork and deploy contracts:
+	2. Create a Sepolia project in <a href="https://www.alchemy.com/" target="_blank">Alchemy</a>
+	3. Set the Alchemy RPC url in .env file
 	```shell
-	anvil -f [ALCHEMY_RPC_URL] --chain-id 11155111
+	```shell
+	SEPOLIA_RPC_URL=
+	```
+	3. Write the RPC url to .env file
+	4. Run a local fork:
+	```shell
+	anvil -f [SEPOLIA_RPC_URL] --chain-id 11155111
+	```
+	4. Deploy contracts. It will use the test private key from .env (PRIVATE_KEY_DEVEL):
+	```shell
 	make deploy-local
 	```
 - Interface:
@@ -107,7 +127,7 @@ The dapp controls at all times the amounts that the user enters, to prevent him 
 	cd www
 	yarn install
 	```
-	2. Create a [WalletConnect](https://cloud.walletconnect.com/) project, get the Project ID
+	2. Create a <a href="https://cloud.walletconnect.com/" target="_blank">WalletConnect</a> project, get the Project ID
 	3. Create .env file, set VITE_WC3_PROJECT_ID
 	```shell
 	cp .env.example .env
@@ -118,6 +138,10 @@ The dapp controls at all times the amounts that the user enters, to prevent him 
 	```
 
 ## Deploy to production
+- Set your private key in .env file
+	```shell
+	PRIVATE_KEY_PROD=
+	```
 - Deploy contracts:
 	```shell
 	make deploy-production
@@ -130,9 +154,9 @@ The dapp controls at all times the amounts that the user enters, to prevent him 
 		cd www
 		yarn build
 		```
-	- B. To [Vercel](https://vercel.com/docs/cli):
-		- Create your project in Vercel
-		- Install cli:
+	- B. To Vercel:
+		- Sign up and create your project in <a href="https://vercel.com/" target="_blank">Vercel</a>
+		- Install <a href="https://vercel.com/docs/cli" target="_blank">cli</a>:
 		```shell
 		yarn add vercel
 		```
@@ -143,6 +167,7 @@ The dapp controls at all times the amounts that the user enters, to prevent him 
 		```
 
 ## Contracts testing
+(work in progress...)
 ```shell
 forge test
 ```
